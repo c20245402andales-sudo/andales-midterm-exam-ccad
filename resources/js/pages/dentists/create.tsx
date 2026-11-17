@@ -63,6 +63,8 @@ export default function CreateDentist() {
                             <input
                                 id="dentist_name"
                                 type="text"
+                                maxLength={150}
+                                autoComplete="name"
                                 value={data.dentist_name}
                                 onChange={(e) =>
                                     setData('dentist_name', e.target.value)
@@ -90,6 +92,7 @@ export default function CreateDentist() {
                             <input
                                 id="dentist_license"
                                 type="text"
+                                maxLength={50}
                                 value={data.dentist_license}
                                 onChange={(e) =>
                                     setData('dentist_license', e.target.value)

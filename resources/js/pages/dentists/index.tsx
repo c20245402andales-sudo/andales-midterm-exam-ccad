@@ -11,6 +11,7 @@ import {
     Eye,
     Users,
 } from 'lucide-react';
+import { type FormEvent } from 'react';
 
 interface Dentist {
     id: number;
@@ -35,19 +36,27 @@ interface PaginatedDentists {
 
 interface Props {
     dentists: PaginatedDentists;
+    search: string;
+    flash: { success?: string | null };
+    errors?: Record<string, string>;
 }
 
-export default function DentistIndex({ dentists }: Props) {
-    const [search, setSearch] = useState('');
+export default function DentistIndex({
+    dentists,
+    search: initialSearch,
+    flash,
+    errors = {},
+}: Props) {
+    const [search, setSearch] = useState(initialSearch);
 
-    const filteredDentists = dentists.data.filter((dentist) => {
-        const term = search.toLowerCase();
+    function submitSearch(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        router.get('/dentists', { search }, { preserveState: true, preserveScroll: true, replace: true });
+    }
 
-        return (
-            dentist.dentist_name.toLowerCase().includes(term) ||
-            dentist.dentist_license.toLowerCase().includes(term)
-        );
-    });
+    function paginationLabel(label: string): string {
+        return label.replace('&laquo;', '‹').replace('&raquo;', '›');
+    }
 
     const deleteDentist = (id: number) => {
         if (confirm('Are you sure you want to delete this dentist?')) {
@@ -60,6 +69,17 @@ export default function DentistIndex({ dentists }: Props) {
             <Head title="Dentists" />
 
             <div className="flex flex-col gap-6 p-4 md:p-8">
+                {errors.dentist && (
+                    <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {errors.dentist}
+                    </p>
+                )}
+                {flash.success && (
+                    <p role="status" className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                        {flash.success}
+                    </p>
+                )}
+
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">
@@ -124,19 +144,19 @@ export default function DentistIndex({ dentists }: Props) {
                             </p>
                         </div>
 
-                        <div className="relative w-full sm:max-w-xs">
-                            <Search
-                                size={18}
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                            />
+                        <form onSubmit={submitSearch} className="flex w-full gap-2 sm:max-w-xs">
                             <input
-                                type="text"
+                                type="search"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search dentist..."
-                                className="w-full rounded-lg border bg-background py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-primary"
+                                aria-label="Search dentists"
+                                className="min-w-0 flex-1 rounded-lg border bg-background px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
                             />
-                        </div>
+                            <button type="submit" aria-label="Search" className="rounded-lg border px-3 text-muted-foreground hover:bg-muted">
+                                <Search size={18} />
+                            </button>
+                        </form>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -152,8 +172,8 @@ export default function DentistIndex({ dentists }: Props) {
                             </thead>
 
                             <tbody className="divide-y">
-                                {filteredDentists.length > 0 ? (
-                                    filteredDentists.map((dentist, index) => (
+                                {dentists.data.length > 0 ? (
+                                    dentists.data.map((dentist, index) => (
                                         <tr
                                             key={dentist.id}
                                             className="transition hover:bg-muted/30"
@@ -181,6 +201,7 @@ export default function DentistIndex({ dentists }: Props) {
                                                     <Link
                                                         href={`/dentists/${dentist.id}`}
                                                         title="View dentist"
+                                                        aria-label={`View ${dentist.dentist_name}`}
                                                         className="rounded-md p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
                                                     >
                                                         <Eye size={17} />
@@ -189,6 +210,7 @@ export default function DentistIndex({ dentists }: Props) {
                                                     <Link
                                                         href={`/dentists/${dentist.id}/edit`}
                                                         title="Edit dentist"
+                                                        aria-label={`Edit ${dentist.dentist_name}`}
                                                         className="rounded-md p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
                                                     >
                                                         <Pencil size={17} />
@@ -198,6 +220,7 @@ export default function DentistIndex({ dentists }: Props) {
                                                         type="button"
                                                         onClick={() => deleteDentist(dentist.id)}
                                                         title="Delete dentist"
+                                                        aria-label={`Delete ${dentist.dentist_name}`}
                                                         className="rounded-md p-2 text-red-500 transition hover:bg-red-500/10"
                                                     >
                                                         <Trash2 size={17} />
@@ -212,7 +235,7 @@ export default function DentistIndex({ dentists }: Props) {
                                             colSpan={5}
                                             className="px-5 py-12 text-center text-muted-foreground"
                                         >
-                                            {search
+                                            {initialSearch
                                                 ? 'No dentists match your search.'
                                                 : 'No dentists registered yet. Click Add Dentist to get started.'}
                                         </td>
@@ -224,7 +247,7 @@ export default function DentistIndex({ dentists }: Props) {
 
                     <div className="flex flex-col gap-3 border-t p-5 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-sm text-muted-foreground">
-                            Showing {filteredDentists.length} of {dentists.total} dentists
+                            Showing {dentists.data.length} of {dentists.total}{initialSearch ? ' matching' : ''} dentists
                         </p>
 
                         <div className="flex flex-wrap gap-1">
@@ -239,8 +262,9 @@ export default function DentistIndex({ dentists }: Props) {
                                             ? 'border-primary bg-primary text-primary-foreground'
                                             : 'bg-background hover:bg-muted'
                                     } disabled:cursor-not-allowed disabled:opacity-40`}
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
+                                >
+                                    {paginationLabel(link.label)}
+                                </button>
                             ))}
                         </div>
                     </div>

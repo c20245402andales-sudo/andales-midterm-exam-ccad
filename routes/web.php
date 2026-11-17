@@ -1,50 +1,26 @@
 
 <?php
 
+use App\Http\Controllers\DentalAppointmentController;
+use App\Http\Controllers\DentistController;
+use App\Http\Controllers\PatientController;
+use App\Http\Controllers\ProcedureController;
+use App\Models\DentalAppointment;
+use App\Models\Dentist;
+use App\Models\Patient;
+use App\Models\Procedure;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
-use App\Http\Controllers\PatientController;
-use App\Http\Controllers\DentistController;
-use App\Http\Controllers\ProcedureController;
-use App\Http\Controllers\DentalAppointmentController;
-
-use App\Models\Patient;
-use App\Models\Dentist;
-use App\Models\Procedure;
-use App\Models\DentalAppointment;
-
-/*
-|--------------------------------------------------------------------------
-| Welcome Page
-|--------------------------------------------------------------------------
-*/
 
 Route::get('/', function () {
     return Inertia::render('welcome');
 })->name('home');
 
-/*
-|--------------------------------------------------------------------------
-| Resource Routes
-|--------------------------------------------------------------------------
-*/
-
-Route::resource('patients', PatientController::class);
-
-Route::resource('dentists', DentistController::class);
-
-Route::resource('procedures', ProcedureController::class);
-
-Route::resource('dental-appointments', DentalAppointmentController::class);
-
-/*
-|--------------------------------------------------------------------------
-| Authenticated Dashboard
-|--------------------------------------------------------------------------
-*/
-
 Route::middleware(['auth'])->group(function () {
+    Route::resource('patients', PatientController::class);
+    Route::resource('dentists', DentistController::class);
+    Route::resource('procedures', ProcedureController::class);
+    Route::resource('dental-appointments', DentalAppointmentController::class);
 
     Route::get('/dashboard', function () {
 
@@ -88,12 +64,6 @@ Route::middleware(['auth'])->group(function () {
     })->name('dashboard');
 
 });
-
-/*
-|--------------------------------------------------------------------------
-| Settings and Authentication Routes
-|--------------------------------------------------------------------------
-*/
 
 require __DIR__.'/settings.php';
 

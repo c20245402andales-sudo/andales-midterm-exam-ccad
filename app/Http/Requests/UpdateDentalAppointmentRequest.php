@@ -2,7 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Models\DentalAppointment;
+use App\Rules\UniqueProcedureToothCombinations;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Carbon;
+use Throwable;
 
 class UpdateDentalAppointmentRequest extends FormRequest
 {
@@ -13,6 +17,12 @@ class UpdateDentalAppointmentRequest extends FormRequest
 
     public function rules(): array
     {
+        $scheduledDatetimeRules = ['required', 'date'];
+
+        if (! $this->scheduledDatetimeIsUnchanged()) {
+            $scheduledDatetimeRules[] = 'after:now';
+        }
+
         return [
             'patient_id' => [
                 'required',
@@ -24,11 +34,7 @@ class UpdateDentalAppointmentRequest extends FormRequest
                 'integer',
                 'exists:dentists,id',
             ],
-            'scheduled_datetime' => [
-                'required',
-                'date',
-                'after:now',
-            ],
+            'scheduled_datetime' => $scheduledDatetimeRules,
             'payment_status' => [
                 'required',
                 'in:unpaid,paid,partial',
@@ -37,6 +43,7 @@ class UpdateDentalAppointmentRequest extends FormRequest
                 'required',
                 'array',
                 'min:1',
+                new UniqueProcedureToothCombinations,
             ],
             'procedures.*.procedure_id' => [
                 'required',
@@ -71,5 +78,22 @@ class UpdateDentalAppointmentRequest extends FormRequest
             'procedures.*.tooth_number.required' => 'Please enter the tooth number.',
             'procedures.*.tooth_number.between' => 'Tooth number must be between 1 and 32.',
         ];
+    }
+
+    private function scheduledDatetimeIsUnchanged(): bool
+    {
+        $appointment = $this->route('dental_appointment');
+        $scheduledDatetime = $this->input('scheduled_datetime');
+
+        if (! $appointment instanceof DentalAppointment || ! is_string($scheduledDatetime)) {
+            return false;
+        }
+
+        try {
+            return Carbon::parse($scheduledDatetime, config('app.timezone'))
+                ->equalTo($appointment->scheduled_datetime);
+        } catch (Throwable) {
+            return false;
+        }
     }
 }

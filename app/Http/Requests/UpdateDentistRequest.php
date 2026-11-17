@@ -4,12 +4,23 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Http\Requests\Concerns\NormalizesClinicInput;
 
 class UpdateDentistRequest extends FormRequest
 {
+    use NormalizesClinicInput;
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->normalizeClinicFields([
+            'dentist_name',
+            'dentist_license',
+        ]);
     }
 
     public function rules(): array

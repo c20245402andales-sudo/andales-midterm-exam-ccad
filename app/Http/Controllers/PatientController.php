@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Patient;
 use App\Http\Requests\StorePatientRequest;
 use App\Http\Requests\UpdatePatientRequest;
+use App\Models\Patient;
 use App\Services\PatientService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -15,15 +16,26 @@ class PatientController extends Controller
     /**
      * Display all patients.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $querySearch = $request->query('search');
+        $search = is_string($querySearch) ? trim($querySearch) : '';
+
         return Inertia::render('patients/index', [
-            'patients' => Patient::with([
-                'appointments.dentist',
-            ])
+            'patients' => Patient::query()
                 ->withCount('appointments')
+                ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search) {
+                    $query->where('patient_code', 'like', "%{$search}%")
+                        ->orWhere('patient_name', 'like', "%{$search}%")
+                        ->orWhere('patient_contact', 'like', "%{$search}%");
+                }))
                 ->orderBy('patient_name')
-                ->paginate(10),
+                ->paginate(10)
+                ->withQueryString(),
+            'search' => $search,
+            'flash' => [
+                'success' => session('success'),
+            ],
         ]);
     }
 

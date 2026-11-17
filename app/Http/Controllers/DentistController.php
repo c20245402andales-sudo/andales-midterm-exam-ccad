@@ -2,25 +2,36 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Dentist;
 use App\Http\Requests\StoreDentistRequest;
 use App\Http\Requests\UpdateDentistRequest;
+use App\Models\Dentist;
 use App\Services\DentistService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class DentistController extends Controller
 {
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $querySearch = $request->query('search');
+        $search = is_string($querySearch) ? trim($querySearch) : '';
+
         return Inertia::render('dentists/index', [
-            'dentists' => Dentist::with([
-                'appointments.patient',
-            ])
+            'dentists' => Dentist::query()
                 ->withCount('appointments')
+                ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search) {
+                    $query->where('dentist_name', 'like', "%{$search}%")
+                        ->orWhere('dentist_license', 'like', "%{$search}%");
+                }))
                 ->orderBy('dentist_name')
-                ->paginate(10),
+                ->paginate(10)
+                ->withQueryString(),
+            'search' => $search,
+            'flash' => [
+                'success' => session('success'),
+            ],
         ]);
     }
 

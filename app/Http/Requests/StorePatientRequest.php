@@ -2,13 +2,26 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesClinicInput;
+use App\Support\ClinicTextNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StorePatientRequest extends FormRequest
 {
+    use NormalizesClinicInput;
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->normalizeClinicFields([
+            'patient_code',
+            'patient_name',
+            'patient_contact',
+        ]);
     }
 
     public function rules(): array
@@ -28,7 +41,8 @@ class StorePatientRequest extends FormRequest
             'patient_contact' => [
                 'required',
                 'string',
-                'max:20',
+                'max:11',
+                'regex:'.ClinicTextNormalizer::PHILIPPINE_MOBILE_NUMBER_PATTERN,
             ],
         ];
     }
@@ -42,7 +56,8 @@ class StorePatientRequest extends FormRequest
             'patient_name.required' => 'Please enter the patient full name.',
             'patient_name.max' => 'The patient name cannot exceed 150 characters.',
             'patient_contact.required' => 'Please enter the patient contact number.',
-            'patient_contact.max' => 'The contact number cannot exceed 20 characters.',
+            'patient_contact.max' => 'The contact number must contain exactly 11 digits.',
+            'patient_contact.regex' => 'Enter an 11-digit Philippine mobile number starting with 09.',
         ];
     }
 }

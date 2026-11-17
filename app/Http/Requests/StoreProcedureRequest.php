@@ -2,13 +2,21 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesClinicInput;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreProcedureRequest extends FormRequest
 {
+    use NormalizesClinicInput;
+
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->normalizeClinicFields(['procedure_name'], ['procedure_name']);
     }
 
     public function rules(): array
@@ -24,6 +32,7 @@ class StoreProcedureRequest extends FormRequest
                 'required',
                 'numeric',
                 'min:0',
+                'max:99999999.99',
                 'decimal:0,2',
             ],
         ];
@@ -38,6 +47,7 @@ class StoreProcedureRequest extends FormRequest
             'procedure_cost.required' => 'Please enter the procedure cost.',
             'procedure_cost.numeric' => 'The procedure cost must be a number.',
             'procedure_cost.min' => 'The procedure cost cannot be negative.',
+            'procedure_cost.max' => 'The procedure cost cannot exceed 99,999,999.99.',
             'procedure_cost.decimal' => 'The procedure cost can have at most two decimal places.',
         ];
     }

@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Patient;
+use App\Support\ClinicTextNormalizer;
+use App\Support\UniqueConstraintValidation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -10,22 +12,24 @@ class PatientService
 {
     public function create(array $data): Patient
     {
-        return DB::transaction(function () use ($data) {
-            $data = $this->sanitize($data);
-
-            return Patient::create($data);
-        });
+        return UniqueConstraintValidation::run(
+            fn () => Patient::create($this->sanitize($data)),
+            'patient_code',
+            'This patient code is already registered.'
+        );
     }
 
     public function update(Patient $patient, array $data): Patient
     {
-        return DB::transaction(function () use ($patient, $data) {
-            $data = $this->sanitize($data);
+        return UniqueConstraintValidation::run(
+            function () use ($patient, $data): Patient {
+                $patient->update($this->sanitize($data));
 
-            $patient->update($data);
-
-            return $patient->refresh();
-        });
+                return $patient;
+            },
+            'patient_code',
+            'This patient code is already registered.'
+        );
     }
 
     public function delete(Patient $patient): void
@@ -33,8 +37,7 @@ class PatientService
         DB::transaction(function () use ($patient) {
             if ($patient->appointments()->exists()) {
                 throw ValidationException::withMessages([
-                    'patient' =>
-                        'This patient has existing appointments and cannot be deleted.',
+                    'patient' => 'This patient has existing appointments and cannot be deleted.',
                 ]);
             }
 
@@ -44,32 +47,12 @@ class PatientService
 
     private function sanitize(array $data): array
     {
-        $code = trim($data['patient_code']);
-        $name = trim(strip_tags($data['patient_name']));
-        $contact = trim($data['patient_contact']);
-
-        if ($code === '') {
-            throw ValidationException::withMessages([
-                'patient_code' => 'The patient code cannot be empty.',
-            ]);
-        }
-
-        if ($name === '') {
-            throw ValidationException::withMessages([
-                'patient_name' => 'The patient name cannot be empty.',
-            ]);
-        }
-
-        if ($contact === '') {
-            throw ValidationException::withMessages([
-                'patient_contact' => 'The patient contact cannot be empty.',
-            ]);
-        }
-
         return [
-            'patient_code' => $code,
-            'patient_name' => $name,
-            'patient_contact' => $contact,
+            'patient_code' => ClinicTextNormalizer::trim($data['patient_code']),
+            'patient_name' => ClinicTextNormalizer::trim($data['patient_name']),
+            'patient_contact' => ClinicTextNormalizer::patientContact(
+                $data['patient_contact'] ?? null
+            ),
         ];
     }
 }

@@ -2,42 +2,47 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DentalAppointment;
-use App\Models\Patient;
-use App\Models\Dentist;
-use App\Models\Procedure;
 use App\Http\Requests\StoreDentalAppointmentRequest;
 use App\Http\Requests\UpdateDentalAppointmentRequest;
+use App\Models\DentalAppointment;
+use App\Models\Dentist;
+use App\Models\Patient;
+use App\Models\Procedure;
 use App\Services\DentalAppointmentService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class DentalAppointmentController extends Controller
 {
     /**
      * Display all dental appointments.
      */
-    public function index(): JsonResponse
+    public function index(): Response
     {
-        return response()->json(
-            DentalAppointment::with([
+        return Inertia::render('dental-appointments/index', [
+            'appointments' => DentalAppointment::with([
                 'patient',
                 'dentist',
                 'procedureEntries.procedure',
             ])
+                ->withSum('procedureEntries as total_cost', 'unit_cost')
                 ->latest('scheduled_datetime')
-                ->paginate(10)
-        );
+                ->paginate(10),
+            'flash' => [
+                'success' => session('success'),
+            ],
+        ]);
     }
 
     /**
      * Show the appointment creation form data.
      */
-    public function create(): JsonResponse
+    public function create(): Response
     {
-        return response()->json([
-            'patients' => Patient::orderBy('patient_name')->get(),
-            'dentists' => Dentist::orderBy('dentist_name')->get(),
-            'procedures' => Procedure::orderBy('procedure_name')->get(),
+        return Inertia::render('dental-appointments/create', [
+            ...$this->formOptions(),
         ]);
     }
 
@@ -47,15 +52,12 @@ class DentalAppointmentController extends Controller
     public function store(
         StoreDentalAppointmentRequest $request,
         DentalAppointmentService $service
-    ): JsonResponse {
-        $appointment = $service->create(
-            $request->validated()
-        );
+    ): RedirectResponse {
+        $service->create($request->validated());
 
-        return response()->json([
-            'message' => 'Appointment created successfully.',
-            'data' => $appointment,
-        ], 201);
+        return redirect()
+            ->route('dental-appointments.index')
+            ->with('success', 'Appointment created successfully.');
     }
 
     /**
@@ -78,16 +80,29 @@ class DentalAppointmentController extends Controller
      */
     public function edit(
         DentalAppointment $dentalAppointment
-    ): JsonResponse {
-        return response()->json([
-            'appointment' => $dentalAppointment->load([
-                'patient',
-                'dentist',
-                'procedureEntries.procedure',
-            ]),
-            'patients' => Patient::orderBy('patient_name')->get(),
-            'dentists' => Dentist::orderBy('dentist_name')->get(),
-            'procedures' => Procedure::orderBy('procedure_name')->get(),
+    ): Response {
+        $dentalAppointment->load([
+            'patient',
+            'dentist',
+            'procedureEntries.procedure',
+        ]);
+
+        return Inertia::render('dental-appointments/edit', [
+            'appointment' => [
+                'id' => $dentalAppointment->id,
+                'patient_id' => $dentalAppointment->patient_id,
+                'dentist_id' => $dentalAppointment->dentist_id,
+                'scheduled_datetime' => $dentalAppointment->scheduled_datetime->format('Y-m-d\\TH:i:s'),
+                'payment_status' => $dentalAppointment->payment_status,
+                'procedure_entries' => $dentalAppointment->procedureEntries->map(fn ($entry) => [
+                    'id' => $entry->id,
+                    'procedure_id' => $entry->procedure_id,
+                    'tooth_number' => $entry->tooth_number,
+                    'unit_cost' => $entry->unit_cost,
+                    'procedure' => $entry->procedure,
+                ])->values(),
+            ],
+            ...$this->formOptions(),
         ]);
     }
 
@@ -98,16 +113,15 @@ class DentalAppointmentController extends Controller
         UpdateDentalAppointmentRequest $request,
         DentalAppointment $dentalAppointment,
         DentalAppointmentService $service
-    ): JsonResponse {
-        $appointment = $service->update(
+    ): RedirectResponse {
+        $service->update(
             $dentalAppointment,
             $request->validated()
         );
 
-        return response()->json([
-            'message' => 'Appointment updated successfully.',
-            'data' => $appointment,
-        ]);
+        return redirect()
+            ->route('dental-appointments.index')
+            ->with('success', 'Appointment updated successfully.');
     }
 
     /**
@@ -116,11 +130,24 @@ class DentalAppointmentController extends Controller
     public function destroy(
         DentalAppointment $dentalAppointment,
         DentalAppointmentService $service
-    ): JsonResponse {
+    ): RedirectResponse {
         $service->delete($dentalAppointment);
 
-        return response()->json([
-            'message' => 'Appointment deleted successfully.',
-        ]);
+        return redirect()
+            ->route('dental-appointments.index')
+            ->with('success', 'Appointment deleted successfully.');
+    }
+
+    private function formOptions(): array
+    {
+        return [
+            'patients' => Patient::orderBy('patient_name')->get(['id', 'patient_name']),
+            'dentists' => Dentist::orderBy('dentist_name')->get(['id', 'dentist_name']),
+            'procedures' => Procedure::orderBy('procedure_name')->get([
+                'id',
+                'procedure_name',
+                'procedure_cost',
+            ]),
+        ];
     }
 }

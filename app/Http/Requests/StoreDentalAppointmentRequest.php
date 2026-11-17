@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\UniqueProcedureToothCombinations;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreDentalAppointmentRequest extends FormRequest
@@ -37,6 +38,7 @@ class StoreDentalAppointmentRequest extends FormRequest
                 'required',
                 'array',
                 'min:1',
+                new UniqueProcedureToothCombinations,
             ],
             'procedures.*.procedure_id' => [
                 'required',

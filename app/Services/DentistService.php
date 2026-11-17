@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Dentist;
+use App\Support\ClinicTextNormalizer;
+use App\Support\UniqueConstraintValidation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -10,22 +12,24 @@ class DentistService
 {
     public function create(array $data): Dentist
     {
-        return DB::transaction(function () use ($data) {
-            $data = $this->sanitize($data);
-
-            return Dentist::create($data);
-        });
+        return UniqueConstraintValidation::run(
+            fn () => Dentist::create($this->sanitize($data)),
+            'dentist_license',
+            'This dentist license number is already registered.'
+        );
     }
 
     public function update(Dentist $dentist, array $data): Dentist
     {
-        return DB::transaction(function () use ($dentist, $data) {
-            $data = $this->sanitize($data);
+        return UniqueConstraintValidation::run(
+            function () use ($dentist, $data): Dentist {
+                $dentist->update($this->sanitize($data));
 
-            $dentist->update($data);
-
-            return $dentist->refresh();
-        });
+                return $dentist;
+            },
+            'dentist_license',
+            'This dentist license number is already registered.'
+        );
     }
 
     public function delete(Dentist $dentist): void
@@ -44,24 +48,9 @@ class DentistService
 
     private function sanitize(array $data): array
     {
-        $name = trim(strip_tags($data['dentist_name']));
-        $license = trim($data['dentist_license']);
-
-        if ($name === '') {
-            throw ValidationException::withMessages([
-                'dentist_name' => 'The dentist name cannot be empty.',
-            ]);
-        }
-
-        if ($license === '') {
-            throw ValidationException::withMessages([
-                'dentist_license' => 'The dentist license cannot be empty.',
-            ]);
-        }
-
         return [
-            'dentist_name' => $name,
-            'dentist_license' => $license,
+            'dentist_name' => ClinicTextNormalizer::trim($data['dentist_name']),
+            'dentist_license' => ClinicTextNormalizer::trim($data['dentist_license']),
         ];
     }
 }

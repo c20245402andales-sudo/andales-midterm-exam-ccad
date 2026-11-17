@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { Search, Plus, Users, Pencil, Trash2, Eye } from 'lucide-react';
-import { useState } from 'react';
+import { type FormEvent, useState } from 'react';
 
 interface Patient {
     id: number;
@@ -27,6 +27,9 @@ interface PatientProps {
         last_page: number;
         total: number;
     };
+    search: string;
+    flash: { success?: string | null };
+    errors?: Record<string, string>;
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -40,14 +43,22 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function PatientsIndex({ patients }: PatientProps) {
-    const [search, setSearch] = useState('');
+export default function PatientsIndex({
+    patients,
+    search: initialSearch,
+    flash,
+    errors = {},
+}: PatientProps) {
+    const [search, setSearch] = useState(initialSearch);
 
-    const filteredPatients = patients.data.filter((patient) =>
-        `${patient.patient_code} ${patient.patient_name} ${patient.patient_contact}`
-            .toLowerCase()
-            .includes(search.toLowerCase())
-    );
+    function submitSearch(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        router.get('/patients', { search }, { preserveState: true, preserveScroll: true, replace: true });
+    }
+
+    function paginationLabel(label: string): string {
+        return label.replace('&laquo;', '‹').replace('&raquo;', '›');
+    }
 
     function deletePatient(patient: Patient) {
         if (confirm(`Are you sure you want to delete ${patient.patient_name}?`)) {
@@ -60,6 +71,17 @@ export default function PatientsIndex({ patients }: PatientProps) {
             <Head title="Patients" />
 
             <div className="flex flex-col gap-6 p-4 md:p-6">
+                {errors.patient && (
+                    <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {errors.patient}
+                    </p>
+                )}
+                {flash.success && (
+                    <p role="status" className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                        {flash.success}
+                    </p>
+                )}
+
                 {/* Page Header */}
                 <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                     <div>
@@ -129,19 +151,19 @@ export default function PatientsIndex({ patients }: PatientProps) {
                             </p>
                         </div>
 
-                        <div className="relative w-full sm:max-w-xs">
-                            <Search
-                                size={18}
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                            />
+                        <form onSubmit={submitSearch} className="flex w-full gap-2 sm:max-w-xs">
                             <input
-                                type="text"
+                                type="search"
                                 value={search}
                                 onChange={(event) => setSearch(event.target.value)}
                                 placeholder="Search patients..."
-                                className="w-full rounded-lg border py-2 pl-10 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                                aria-label="Search patients"
+                                className="min-w-0 flex-1 rounded-lg border px-4 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                             />
-                        </div>
+                            <button type="submit" aria-label="Search" className="rounded-lg border px-3 text-gray-600 hover:bg-gray-100">
+                                <Search size={18} />
+                            </button>
+                        </form>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -167,8 +189,8 @@ export default function PatientsIndex({ patients }: PatientProps) {
                             </thead>
 
                             <tbody className="divide-y">
-                                {filteredPatients.length > 0 ? (
-                                    filteredPatients.map((patient) => (
+                                {patients.data.length > 0 ? (
+                                    patients.data.map((patient) => (
                                         <tr
                                             key={patient.id}
                                             className="hover:bg-gray-50 dark:hover:bg-neutral-800"
@@ -197,6 +219,7 @@ export default function PatientsIndex({ patients }: PatientProps) {
                                                         href={`/patients/${patient.id}`}
                                                         className="rounded-lg border p-2 text-gray-600 hover:bg-gray-100"
                                                         title="View patient"
+                                                        aria-label={`View ${patient.patient_name}`}
                                                     >
                                                         <Eye size={16} />
                                                     </Link>
@@ -205,6 +228,7 @@ export default function PatientsIndex({ patients }: PatientProps) {
                                                         href={`/patients/${patient.id}/edit`}
                                                         className="rounded-lg border p-2 text-blue-600 hover:bg-blue-50"
                                                         title="Edit patient"
+                                                        aria-label={`Edit ${patient.patient_name}`}
                                                     >
                                                         <Pencil size={16} />
                                                     </Link>
@@ -214,6 +238,7 @@ export default function PatientsIndex({ patients }: PatientProps) {
                                                         onClick={() => deletePatient(patient)}
                                                         className="rounded-lg border p-2 text-red-600 hover:bg-red-50"
                                                         title="Delete patient"
+                                                        aria-label={`Delete ${patient.patient_name}`}
                                                     >
                                                         <Trash2 size={16} />
                                                     </button>
@@ -233,11 +258,11 @@ export default function PatientsIndex({ patients }: PatientProps) {
                                             />
 
                                             <p className="mt-3 font-semibold">
-                                                No patients found
+                                                {initialSearch ? 'No patients match your search.' : 'No patients found'}
                                             </p>
 
                                             <p className="mt-1 text-sm text-gray-500">
-                                                Add a patient or try another search.
+                                                {initialSearch ? 'Try another search.' : 'Add a patient to get started.'}
                                             </p>
                                         </td>
                                     </tr>
@@ -249,7 +274,7 @@ export default function PatientsIndex({ patients }: PatientProps) {
                     {/* Pagination */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t p-5">
                         <p className="text-sm text-gray-500">
-                            Showing {patients.data.length} of {patients.total} patients
+                            Showing {patients.data.length} of {patients.total}{initialSearch ? ' matching' : ''} patients
                         </p>
 
                         <div className="flex flex-wrap gap-2">
@@ -264,8 +289,9 @@ export default function PatientsIndex({ patients }: PatientProps) {
                                             ? 'border-blue-600 bg-blue-600 text-white'
                                             : 'hover:bg-gray-100'
                                     } disabled:cursor-not-allowed disabled:opacity-40`}
-                                    dangerouslySetInnerHTML={{ __html: link.label }}
-                                />
+                                >
+                                    {paginationLabel(link.label)}
+                                </button>
                             ))}
                         </div>
                     </div>

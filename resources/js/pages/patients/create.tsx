@@ -4,6 +4,11 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft, UserPlus, Save } from 'lucide-react';
 import { FormEvent } from 'react';
+import {
+    normalizePatientContactInput,
+    PHILIPPINE_MOBILE_NUMBER_MESSAGE,
+    PHILIPPINE_MOBILE_NUMBER_PATTERN,
+} from '@/lib/patient-contact';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: '/dashboard' },
@@ -17,6 +22,9 @@ export default function CreatePatient() {
         patient_name: '',
         patient_contact: '',
     });
+    const contactIsInvalid =
+        data.patient_contact.length > 0 &&
+        !PHILIPPINE_MOBILE_NUMBER_PATTERN.test(data.patient_contact);
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -67,6 +75,8 @@ export default function CreatePatient() {
                             <input
                                 id="patient_code"
                                 type="text"
+                                maxLength={50}
+                                required
                                 value={data.patient_code}
                                 onChange={(event) => setData('patient_code', event.target.value)}
                                 placeholder="Example: PAT-001"
@@ -88,6 +98,9 @@ export default function CreatePatient() {
                             <input
                                 id="patient_name"
                                 type="text"
+                                maxLength={150}
+                                autoComplete="name"
+                                required
                                 value={data.patient_name}
                                 onChange={(event) => setData('patient_name', event.target.value)}
                                 placeholder="Enter patient's full name"
@@ -108,16 +121,30 @@ export default function CreatePatient() {
 
                             <input
                                 id="patient_contact"
-                                type="text"
+                                type="tel"
+                                inputMode="numeric"
+                                pattern={PHILIPPINE_MOBILE_NUMBER_PATTERN.source}
+                                minLength={11}
+                                maxLength={11}
+                                autoComplete="tel"
+                                title={PHILIPPINE_MOBILE_NUMBER_MESSAGE}
+                                required
                                 value={data.patient_contact}
-                                onChange={(event) => setData('patient_contact', event.target.value)}
+                                onChange={(event) =>
+                                    setData(
+                                        'patient_contact',
+                                        normalizePatientContactInput(event.target.value),
+                                    )
+                                }
+                                aria-invalid={Boolean(errors.patient_contact) || contactIsInvalid}
+                                aria-describedby="patient_contact_error"
                                 placeholder="Example: 09123456789"
                                 className="w-full rounded-lg border px-4 py-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                             />
 
-                            {errors.patient_contact && (
-                                <p className="mt-1 text-sm text-red-600">
-                                    {errors.patient_contact}
+                            {(errors.patient_contact || contactIsInvalid) && (
+                                <p id="patient_contact_error" role="alert" className="mt-1 text-sm text-red-600">
+                                    {errors.patient_contact || PHILIPPINE_MOBILE_NUMBER_MESSAGE}
                                 </p>
                             )}
                         </div>

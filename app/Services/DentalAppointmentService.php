@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\DentalAppointment;
+use App\Models\Dentist;
 use App\Models\Procedure;
+use App\Support\UniqueConstraintValidation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -14,31 +16,34 @@ class DentalAppointmentService
      */
     public function create(array $data): DentalAppointment
     {
-        return DB::transaction(function () use ($data) {
+        return UniqueConstraintValidation::run(
+            fn () => DB::transaction(function () use ($data) {
+                $this->checkDentistSchedule(
+                    $data['dentist_id'],
+                    $data['scheduled_datetime']
+                );
 
-            $this->checkDentistSchedule(
-                $data['dentist_id'],
-                $data['scheduled_datetime']
-            );
+                $appointment = DentalAppointment::create([
+                    'patient_id' => $data['patient_id'],
+                    'dentist_id' => $data['dentist_id'],
+                    'scheduled_datetime' => $data['scheduled_datetime'],
+                    'payment_status' => $data['payment_status'] ?? 'unpaid',
+                ]);
 
-            $appointment = DentalAppointment::create([
-                'patient_id' => $data['patient_id'],
-                'dentist_id' => $data['dentist_id'],
-                'scheduled_datetime' => $data['scheduled_datetime'],
-                'payment_status' => $data['payment_status'] ?? 'unpaid',
-            ]);
+                $this->syncProcedures(
+                    $appointment,
+                    $data['procedures']
+                );
 
-            $this->syncProcedures(
-                $appointment,
-                $data['procedures']
-            );
-
-            return $appointment->load([
-                'patient',
-                'dentist',
-                'procedureEntries.procedure',
-            ]);
-        });
+                return $appointment->load([
+                    'patient',
+                    'dentist',
+                    'procedureEntries.procedure',
+                ]);
+            }),
+            'procedures',
+            'A procedure and tooth combination is already assigned to this appointment.'
+        );
     }
 
     /**
@@ -48,32 +53,35 @@ class DentalAppointmentService
         DentalAppointment $appointment,
         array $data
     ): DentalAppointment {
-        return DB::transaction(function () use ($appointment, $data) {
+        return UniqueConstraintValidation::run(
+            fn () => DB::transaction(function () use ($appointment, $data) {
+                $this->checkDentistSchedule(
+                    $data['dentist_id'],
+                    $data['scheduled_datetime'],
+                    $appointment->id
+                );
 
-            $this->checkDentistSchedule(
-                $data['dentist_id'],
-                $data['scheduled_datetime'],
-                $appointment->id
-            );
+                $appointment->update([
+                    'patient_id' => $data['patient_id'],
+                    'dentist_id' => $data['dentist_id'],
+                    'scheduled_datetime' => $data['scheduled_datetime'],
+                    'payment_status' => $data['payment_status'],
+                ]);
 
-            $appointment->update([
-                'patient_id' => $data['patient_id'],
-                'dentist_id' => $data['dentist_id'],
-                'scheduled_datetime' => $data['scheduled_datetime'],
-                'payment_status' => $data['payment_status'],
-            ]);
+                $this->syncProcedures(
+                    $appointment,
+                    $data['procedures']
+                );
 
-            $this->syncProcedures(
-                $appointment,
-                $data['procedures']
-            );
-
-            return $appointment->load([
-                'patient',
-                'dentist',
-                'procedureEntries.procedure',
-            ]);
-        });
+                return $appointment->load([
+                    'patient',
+                    'dentist',
+                    'procedureEntries.procedure',
+                ]);
+            }),
+            'procedures',
+            'A procedure and tooth combination is already assigned to this appointment.'
+        );
     }
 
     /**
@@ -98,6 +106,11 @@ class DentalAppointmentService
         string $scheduledDatetime,
         ?int $ignoreId = null
     ): void {
+        Dentist::query()
+            ->whereKey($dentistId)
+            ->lockForUpdate()
+            ->firstOrFail();
+
         $query = DentalAppointment::where(
             'dentist_id',
             $dentistId
@@ -112,8 +125,7 @@ class DentalAppointmentService
 
         if ($query->exists()) {
             throw ValidationException::withMessages([
-                'scheduled_datetime' =>
-                    'This dentist already has an appointment at that time.',
+                'scheduled_datetime' => 'This dentist already has an appointment at that time.',
             ]);
         }
     }
@@ -125,18 +137,32 @@ class DentalAppointmentService
         DentalAppointment $appointment,
         array $procedures
     ): void {
+        $existingCosts = $appointment->procedureEntries()
+            ->get()
+            ->keyBy(fn ($entry) => $entry->procedure_id.':'.$entry->tooth_number);
+
         $appointment->procedureEntries()->delete();
 
-        foreach ($procedures as $item) {
+        $procedureIds = array_values(array_unique(
+            array_column($procedures, 'procedure_id')
+        ));
 
-            $procedure = Procedure::findOrFail(
-                $item['procedure_id']
-            );
+        $procedureRecords = Procedure::query()
+            ->whereKey($procedureIds)
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('id');
+
+        foreach ($procedures as $item) {
+            $procedure = $procedureRecords->get($item['procedure_id'])
+                ?? Procedure::findOrFail($item['procedure_id']);
+            $combination = $procedure->id.':'.$item['tooth_number'];
 
             $appointment->procedureEntries()->create([
                 'procedure_id' => $procedure->id,
                 'tooth_number' => $item['tooth_number'],
-                'unit_cost' => $procedure->procedure_cost,
+                'unit_cost' => $existingCosts->get($combination)?->unit_cost
+                    ?? $procedure->procedure_cost,
             ]);
         }
     }
